@@ -8,7 +8,6 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
-import android.speech.tts.Voice;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.TypedValue;
@@ -23,8 +22,14 @@ import com.daimajia.androidanimations.library.YoYo;
 import org.jsoup.Jsoup;
 
 import java.util.ArrayList;
+import java.util.Locale;
+import java.util.Set;
+
+import static android.os.Build.VERSION.SDK_INT;
+import static android.os.Build.VERSION_CODES.LOLLIPOP;
 
 public class LiveTextView extends RelativeLayout {
+    public static final String TAG = "LiveTextView";
 
     private Context context;
     private AttributeSet attrs;
@@ -64,14 +69,14 @@ public class LiveTextView extends RelativeLayout {
         initView();
     }
 
-    public LiveTextView (Context context, AttributeSet attrs) {
+    public LiveTextView(Context context, AttributeSet attrs) {
         super(context, attrs);
         this.context = context;
         this.attrs = attrs;
         initView();
     }
 
-    public LiveTextView (Context context, AttributeSet attrs, int defStyleAttr) {
+    public LiveTextView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         this.context = context;
         this.attrs = attrs;
@@ -132,7 +137,7 @@ public class LiveTextView extends RelativeLayout {
         onLoadListener = listener;
     }
 
-    public void setOnFinishListener (OnFinishListener listener) {
+    public void setOnFinishListener(OnFinishListener listener) {
         onFinishListener = listener;
     }
 
@@ -149,7 +154,7 @@ public class LiveTextView extends RelativeLayout {
         next.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
     }
 
-    public void setLargeTextSize (int size) {
+    public void setLargeTextSize(int size) {
         current.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
     }
 
@@ -319,7 +324,7 @@ public class LiveTextView extends RelativeLayout {
 
 
     private void previous() {
-        currentIndex = Math.max(0,currentIndex - 1);
+        currentIndex = Math.max(0, currentIndex - 1);
         start();
 
         if (animate) {
@@ -446,6 +451,11 @@ public class LiveTextView extends RelativeLayout {
                     });
                     paused = false;
                     playing = true;
+
+                    textToSpeech.setLanguage(locale);
+
+                    Log.v(TAG, "Supported Languages: " + getSupportedLanguages(textToSpeech));
+
                     textToSpeech.speak(text.get(currentIndex), TextToSpeech.QUEUE_FLUSH, null, text.get(currentIndex));
                     setTextViews(null);
                 } else {
@@ -458,5 +468,48 @@ public class LiveTextView extends RelativeLayout {
 
     }
 
+    public Locale locale = Locale.ENGLISH;
 
+
+    public static ArrayList<Locale> getSupportedLanguages(TextToSpeech textToSpeech) {
+        return SDK_INT >= LOLLIPOP
+                ? initSupportedLanguagesLollipop(textToSpeech)
+                : initSupportedLanguagesLegacy(textToSpeech);
+    }
+
+    private static ArrayList<Locale> initSupportedLanguagesLollipop(TextToSpeech textToSpeech) {
+        ArrayList<Locale> languages = new ArrayList<>();
+        Set<Locale> availableLocales = textToSpeech.getAvailableLanguages();
+        for (Locale locale : availableLocales) {
+            languages.add(locale);
+        }
+        return languages;
+    }
+
+    private static ArrayList<Locale> initSupportedLanguagesLegacy(TextToSpeech textToSpeech) {
+        ArrayList<Locale> languages = new ArrayList<>();
+        Locale[] allLocales = Locale.getAvailableLocales();
+        for (Locale locale : allLocales) {
+            try {
+                int res = textToSpeech.isLanguageAvailable(locale);
+                boolean hasVariant = (null != locale.getVariant() && locale.getVariant().length() > 0);
+                boolean hasCountry = (null != locale.getCountry() && locale.getCountry().length() > 0);
+
+                boolean isLocaleSupported =
+                        false == hasVariant && false == hasCountry && res == TextToSpeech.LANG_AVAILABLE ||
+                                false == hasVariant && true == hasCountry && res == TextToSpeech.LANG_COUNTRY_AVAILABLE ||
+                                res == TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE;
+
+                Log.d(TAG, "TextToSpeech Engine isLanguageAvailable " + locale + " (supported=" + isLocaleSupported + ",res=" + res + ", country=" + locale.getCountry() + ", variant=" + locale.getVariant() + ")");
+
+                if (true == isLocaleSupported) {
+                    languages.add(locale);
+                }
+            } catch (Exception ex) {
+                Log.e(TAG, "Error checking if language is available for TTS (locale=" + locale + "): " + ex.getClass().getSimpleName() + "-" + ex.getMessage());
+            }
+        }
+
+        return languages;
+    }
 }
